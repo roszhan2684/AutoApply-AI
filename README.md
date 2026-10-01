@@ -1,277 +1,80 @@
-# AutoApply AI 🤖
+<div align="center">
 
-An AI-powered job application agent that automatically discovers jobs, scores them against your
-profile, generates tailored resumes and cover letters, and submits applications — all hands-free.
+# ⚡ AutoApply AI
 
----
+**Your job search on autopilot. An AI agent that finds roles, scores how well you fit, tailors your resume and cover letter, and submits the application, all from one command center.**
 
-## Architecture
+![Python](https://img.shields.io/badge/Python-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=nextdotjs&logoColor=white)
+![Claude](https://img.shields.io/badge/Anthropic-Claude-D97757?style=flat-square&logo=anthropic&logoColor=white)
+![Playwright](https://img.shields.io/badge/Playwright-browser%20automation-2EAD33?style=flat-square&logo=playwright&logoColor=white)
+![Postgres](https://img.shields.io/badge/PostgreSQL-SQLAlchemy%20async-4169E1?style=flat-square&logo=postgresql&logoColor=white)
 
-```
-autoapply-ai/
-├── backend/                      # Python FastAPI
-│   ├── main.py                   # App entry, CORS, scheduler
-│   ├── agents/
-│   │   ├── job_scraper.py        # Playwright scraper (LinkedIn, Indeed, Wellfound)
-│   │   ├── job_matcher.py        # Claude-powered resume↔job matching
-│   │   ├── resume_optimizer.py   # Claude ATS resume tailoring
-│   │   ├── cover_letter_generator.py  # Claude cover letter writer
-│   │   └── application_bot.py    # Playwright form filler + submitter
-│   ├── database/
-│   │   ├── models.py             # SQLAlchemy ORM (Job, Application, UserProfile)
-│   │   └── database.py           # Async PostgreSQL engine
-│   ├── routes/
-│   │   ├── jobs.py               # /api/jobs — CRUD + AI actions
-│   │   ├── applications.py       # /api/applications — tracking + dashboard stats
-│   │   ├── profile.py            # /api/profile — user profile CRUD
-│   │   └── pipeline.py           # /api/pipeline — full agent pipeline
-│   ├── services/
-│   │   └── claude_client.py      # Anthropic API wrapper
-│   ├── requirements.txt
-│   └── .env.example
-│
-├── frontend/                     # Next.js 14 + TypeScript + Tailwind
-│   ├── app/
-│   │   ├── dashboard/page.tsx    # Command center with live stats
-│   │   ├── jobs/page.tsx         # Filterable job board
-│   │   ├── applications/page.tsx # Application tracker with kanban status
-│   │   └── profile/page.tsx      # Profile + resume editor
-│   ├── components/
-│   │   ├── Sidebar.tsx
-│   │   ├── StatCard.tsx
-│   │   ├── JobDetailModal.tsx     # AI actions: match, optimize, apply
-│   │   ├── RunPipelineModal.tsx   # Pipeline config + launcher
-│   │   ├── MatchScoreBadge.tsx
-│   │   ├── StatusBadge.tsx
-│   │   └── SourceBadge.tsx
-│   ├── lib/api.ts                 # Typed API client (axios)
-│   └── types/index.ts
-│
-└── README.md
-```
+<img src="docs/screenshots/dashboard.jpg" width="880" alt="AutoApply command center" />
+
+</div>
 
 ---
 
-## Prerequisites
+## The problem
 
-- **Python 3.11+**
-- **Node.js 20+**
-- **PostgreSQL 15+** (local or cloud)
-- **Anthropic API key** — [get one here](https://console.anthropic.com)
+Applying for jobs is a second full-time job: search five boards, skim fifty listings, rewrite your resume for each one, write a cover letter, and fill out the same form again. Most of it is repetitive, but the parts that matter (*is this a good fit?*, *what should I emphasize?*) need judgment.
 
----
+## What AutoApply does
 
-## Setup
-
-### 1. Clone and configure environment
-
-```bash
-git clone <repo> autoapply-ai
-cd autoapply-ai
+```
+ Scrape  →   Match   →   Tailor   →   Apply   →   Track
+LinkedIn    Claude      résumé +     Playwright   pipeline
+Indeed      scores      cover        fills the    dashboard
+Wellfound   fit 0–100   letter       real form
 ```
 
-### 2. Backend setup
+| Stage | Agent | What happens |
+|---|---|---|
+| 🔎 **Discover** | `JobScraper` | Pulls fresh listings from **LinkedIn**, **Indeed** and **Wellfound** and fetches full job descriptions. |
+| 🎯 **Match** | `JobMatcher` | Claude scores every job 0–100 against your profile and only those above your threshold move on. |
+| ✍️ **Tailor** | `ResumeOptimizer`, `CoverLetterGenerator` | Rewrites your resume emphasis and drafts a role-specific cover letter for each match. |
+| 🤖 **Apply** | `ApplicationBot` | Drives a real browser to submit on **Greenhouse**, **Lever**, **LinkedIn Easy Apply** and generic forms, handling text fields, dropdowns, radio groups and custom questions. |
+| 📊 **Track** | Dashboard | Every application moves through *Submitted → Viewed → Interview → Offer / Rejected*. |
 
-```bash
+## Screens
+
+<p align="center">
+  <img src="docs/screenshots/jobs.jpg" width="49%" alt="Job board with match scores" />
+  <img src="docs/screenshots/applications.jpg" width="49%" alt="Application tracker" />
+</p>
+
+- **Command Center:** jobs discovered, matches, applications, average match score, top-matched jobs, pipeline breakdown and recent activity.
+- **Job Board:** search and filter by status, source and minimum score, with one-click **Scrape** and **Match All**.
+- **Applications:** a full history with status filters and links back to each posting.
+- **Profile:** personal info, job targets and resume that the agents work from.
+
+## Safety rails
+
+- **Dry run by default.** Pipeline runs use `dry_run: true` unless you turn it off, so you can watch the agent work without anything being submitted.
+- **Caps and thresholds.** `max_applications` per run (default 5) and a `min_match_score` gate keep it targeted.
+- **Daily schedule.** APScheduler runs a fresh job search every morning at 8:00.
+
+## Quick start
+
+```sh
+# Backend
 cd backend
+pip install -r requirements.txt && playwright install chromium
+cp .env.example .env              # ANTHROPIC_API_KEY, DATABASE_URL, your contact details
+python seed_demo.py               # optional: 10 demo jobs + 5 applications
+uvicorn main:app --reload         # → http://localhost:8000
 
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install Playwright browsers
-playwright install chromium
-
-# Configure environment
-cp .env.example .env
+# Frontend
+cd ../frontend
+npm install && npm run dev        # → http://localhost:3000
 ```
 
-Edit `.env` with your values:
+## Tech
 
-```env
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-DATABASE_URL=postgresql+asyncpg://postgres:password@localhost:5432/autoapply
+**Backend:** FastAPI, SQLAlchemy (async) with PostgreSQL, Anthropic Claude, Playwright, BeautifulSoup and APScheduler.
+**Frontend:** Next.js 14 (App Router), TypeScript, Tailwind.
 
-USER_NAME=Your Full Name
-USER_EMAIL=you@email.com
-USER_PHONE=+1 (555) 123-4567
-USER_LINKEDIN=https://linkedin.com/in/yourprofile
-USER_GITHUB=https://github.com/yourusername
-USER_WEBSITE=https://yourportfolio.com
-```
+## About
 
-### 3. Create PostgreSQL database
-
-```bash
-psql -U postgres -c "CREATE DATABASE autoapply;"
-```
-
-Tables are auto-created when the server starts.
-
-### 4. Start backend
-
-```bash
-cd backend
-uvicorn main:app --reload --port 8000
-```
-
-API docs available at: http://localhost:8000/docs
-
-### 5. Frontend setup
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Dashboard at: http://localhost:3000
-
----
-
-## Usage
-
-### Option A: Dashboard UI
-
-1. Open http://localhost:3000
-2. Go to **Profile** → paste your resume, fill in your details, set target roles
-3. Go to **Dashboard** → click **Scrape Jobs** to discover new listings
-4. Click **Run Agent** → configure the pipeline, toggle Dry Run, click Run
-5. Watch the **Jobs** and **Applications** tabs populate
-
-### Option B: API directly
-
-```bash
-# Scrape jobs
-curl -X POST http://localhost:8000/api/jobs/scrape
-
-# Score all unmatched jobs with Claude
-curl -X POST http://localhost:8000/api/jobs/match-all?limit=20
-
-# Generate tailored resume for job ID 1
-curl -X POST http://localhost:8000/api/jobs/1/optimize-resume
-
-# Generate cover letter
-curl -X POST http://localhost:8000/api/jobs/1/cover-letter
-
-# Apply (dry run — no actual submission)
-curl -X POST "http://localhost:8000/api/jobs/1/apply?dry_run=true"
-
-# Apply for real
-curl -X POST "http://localhost:8000/api/jobs/1/apply?dry_run=false"
-
-# Run full pipeline (dry run)
-curl -X POST http://localhost:8000/api/pipeline/run \
-  -H "Content-Type: application/json" \
-  -d '{"dry_run": true, "max_applications": 5, "min_match_score": 70, "scrape_first": true}'
-```
-
----
-
-## API Reference
-
-### Jobs
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/jobs` | List jobs (filter by status, source, min_score) |
-| GET | `/api/jobs/{id}` | Get single job |
-| POST | `/api/jobs/scrape` | Trigger scraping (background task) |
-| POST | `/api/jobs/match-all` | Score all unmatched jobs with Claude |
-| POST | `/api/jobs/{id}/match` | Score one job |
-| POST | `/api/jobs/{id}/optimize-resume` | Generate tailored resume |
-| POST | `/api/jobs/{id}/cover-letter` | Generate cover letter |
-| POST | `/api/jobs/{id}/apply` | Auto-apply via Playwright |
-| DELETE | `/api/jobs/{id}` | Delete job |
-
-### Applications
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/applications` | List applications |
-| GET | `/api/applications/stats` | Dashboard stats |
-| GET | `/api/applications/{id}` | Get application |
-| PATCH | `/api/applications/{id}` | Update status/notes |
-
-### Profile
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/api/profile` | Get user profile |
-| PUT | `/api/profile` | Update profile + resume |
-
-### Pipeline
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| POST | `/api/pipeline/run` | Full agent pipeline |
-
----
-
-## AI Prompts
-
-### Job Matching
-Claude receives the job description and resume and returns a JSON match score (0–100) with reasons,
-matching skills, missing skills, and a recommendation.
-
-### Resume Optimization
-Claude rewrites the resume to mirror the job description's language and keywords, reorders sections
-by relevance, and maximizes ATS score — without fabricating any experience.
-
-### Cover Letter
-Claude writes a 3-4 paragraph professional cover letter with a company-specific hook, 2-3 concrete
-experience connections, and a confident close.
-
----
-
-## Supported Application Platforms
-
-| Platform | Status |
-|----------|--------|
-| Greenhouse | ✅ Full form fill + submit |
-| Lever | ✅ Full form fill + submit |
-| LinkedIn Easy Apply | ✅ Multi-step flow |
-| Workday | ⚠️ Generic fallback |
-| Ashby | ⚠️ Generic fallback |
-| Custom / Generic | ✅ Heuristic form fill |
-
----
-
-## Scheduling
-
-The backend runs a daily job scrape at **8:00 AM UTC** via APScheduler.
-To adjust the schedule, edit `main.py`:
-
-```python
-scheduler.add_job(_daily_search, "cron", hour=8, minute=0)
-```
-
----
-
-## Safety
-
-- **Dry run mode is ON by default** — no applications are submitted unless you explicitly toggle it off
-- Match score threshold defaults to **70%** — only strong matches are applied to
-- Max applications per run defaults to **5** — configurable in the pipeline modal
-
----
-
-## Tech Stack
-
-| Layer | Tech |
-|-------|------|
-| Frontend | Next.js 14, TypeScript, Tailwind CSS, React Query |
-| Backend | Python 3.11, FastAPI, SQLAlchemy (async) |
-| Database | PostgreSQL 15 |
-| AI | Anthropic Claude (claude-opus-4-5) |
-| Automation | Playwright (Chromium) |
-| Scheduler | APScheduler |
-
----
-
-## License
-
-MIT
+Built by **Roszhan Raj**. *Screenshots show the bundled demo data from `seed_demo.py`.*
